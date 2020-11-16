@@ -6,6 +6,8 @@
 //
 //******************************************************************************
 
+
+
 /*
 GPLv3 copyrigth
 
@@ -33,16 +35,814 @@ extern crate unic_normal;
 extern crate lazy_static;
 
 
-
-
 //******************************************************************************
 // MOD STRINGDIST
 // 2020 string distances Rust (Lib) Modul, 
 // Prof. Charlotte Schubert Alte Geschichte, Leipzig
 //******************************************************************************
 pub mod strdist{
+    use std::cmp;
+    use std::collections::HashSet;
+    use std::collections::HashMap;
 
+    /*------------------------------------------------------------------------------
+                     Programming Helper
+    ------------------------------------------------------------------------------*/
+    pub fn set<'a>( aA: &'a Vec<&str> ) -> HashSet<&'a str> {
+        //return aA.into_iter( ).collect( ); //move
+        return aA.iter( ).cloned( ).collect( ); //copy
+    }
 
+    pub fn list<'a>( aS: &'a HashSet<&str> ) -> Vec<&'a str> {
+        //return aS.into_iter( ).collect( ); //move
+        return aS.iter( ).cloned( ).collect( ); //copy
+    }
+
+    fn max<T:cmp::Ord>( a: T, b: T ) -> T {
+        return cmp::max( a, b );
+    }
+
+    fn min<T:cmp::Ord>( a: T, b: T ) -> T {
+        return cmp::min( a, b );
+    }
+
+    fn pmax<T:cmp::PartialOrd>( a: T, b: T ) -> T {
+        if a > b {
+            return a;
+        } else {
+            return b;
+        }
+    }
+
+    fn pmin<T:cmp::PartialOrd>( a: T, b: T ) -> T {
+        if a < b {
+            return a;
+        } else {
+            return b;
+        }
+    }
+    
+    static True: bool = true;
+    static False: bool = false;
+
+    /*------------------------------------------------------------------------------
+            SET OPERATIONS 
+    ------------------------------------------------------------------------------*/
+
+    pub fn SetSymDiff<'a>( setA: &HashSet<&'a str>, setB: &HashSet<&'a str> ) -> HashSet<&'a str> { 
+        let retset: HashSet<_> = setA.symmetric_difference( setB ).cloned( ).collect( );
+        return retset;
+    }
+
+    pub fn SetDiff<'a>( setA: &HashSet<&'a str>, setB: &HashSet<&'a str> ) -> HashSet<&'a str> { 
+        return setA.difference( setB ).cloned( ).collect( );
+    }
+
+    pub fn SetUnsion<'a>( setA: &HashSet<&'a str>, setB: &HashSet<&'a str> ) -> HashSet<&'a str> { 
+        return setA.union( setB ).cloned( ).collect( );
+    }
+
+    pub fn SetIntersection<'a>( setA: &HashSet<&'a str>, setB: &HashSet<&'a str> ) -> HashSet<&'a str> { 
+        return setA.intersection( setB ).cloned( ).collect( );
+    }
+
+    pub fn SetSymDiffLen( setA: &HashSet<&str>, setB: &HashSet<&str> ) -> usize { 
+        return setA.symmetric_difference( setB ).collect::<HashSet<_>>( ).len( );
+    }
+
+    pub fn SetDiffLen( setA: &HashSet<&str>, setB: &HashSet<&str> ) -> usize { 
+        return setA.difference( setB ).collect::<HashSet<_>>( ).len( );
+    }
+
+    pub fn SetUnsionLen( setA: &HashSet<&str>, setB: &HashSet<&str> ) -> usize { 
+        return setA.union( setB ).collect::<HashSet<_>>( ).len( );
+    }
+
+    pub fn SetIntersectionLen( setA: &HashSet<&str>, setB: &HashSet<&str> ) -> usize { 
+        return setA.intersection( setB ).collect::<HashSet<_>>( ).len( );
+    }
+    
+    /*------------------------------------------------------------------------------
+            generalized comparison: DISTANCES
+    ------------------------------------------------------------------------------*/
+
+    //NOTE: all dist/Containedness/common functions take two arrays as first input, the array could be any representation of text (string, sequence, gram, selected words)
+
+    pub fn WLEV( s1: &Vec<&str>, s2: &Vec<&str>, Wv: &Vec<usize>, Ws: &HashMap<String, usize> ) -> usize { 
+        /*
+            NAME: weighted levenshtein, 
+            INPUT: - s1 and s2 as representations, 
+                   - Wv a weight for pairs in A and B, 
+                   - Ws a list of 4 weights related to the operations 
+                     substitution, insertion, deletion, exchange,
+            RETURN: Number of edited Letters / sum of editweights,
+
+        */
+        //println!("s1 {:?}\n\n", s1);
+        //println!("s2 {:?}\n\n", s2);
+        let lens1 = s1.len( );
+        let lens2 = s2.len( );
+        
+        //println!("lens1 {}\n\n", lens1);
+        //println!("lens2 {}\n\n", lens2);
+        if lens1 == 0 || lens2 == 0 { 
+            return usize::MAX;
+        }
+         
+        if lens1 < lens2 {
+            return WLEV( s2, s1, Wv, Ws );
+        }
+        
+        let mut m: Vec<Vec<usize>> = vec![]; // is matrix
+        
+        // increment along the first column of each row
+        for i in 0..lens2 {
+            let mut insvec = vec![0; lens1 ];
+            insvec[0] = i;
+            m.push( insvec );
+        }
+        // increment each column in the first row
+        for j in 0..lens1 {
+          m[ 0 ][j] = j;
+        }
+        //println!("m {:?}\n\n", m);
+        // fill in the rest of the matrix
+        for i in 1..lens2 {
+          //println!("i {}", i);
+          for j in 1..lens1 {
+
+            if s2[ i-1 ] == s1[ j-1 ] {
+              m[i][j] = m[i-1][j-1];
+                
+            } else {
+                let charsum = "".to_string()+s2[ i-1 ]+s1[ j-1 ];
+                let mut weightofdigram = 0;
+                if Ws.contains_key( &charsum ) {
+                    weightofdigram = Ws[ &charsum ];
+                }
+                if 1 < i && 1 < j {
+                    m[i][j] = min( 
+                                min(
+                                    m[i-1][j-1] + Wv[0], //substitution
+                                    min(
+                                        m[i][j-1] + Wv[1], //insertion
+                                        m[i-1][j] + Wv[2])), //deletion
+                                m[i-2][j-2] + Wv[3] ) //exchange
+                             + weightofdigram; //digram weight
+                } else {
+                    m[i][j] = min(m[i-1][j-1] + Wv[0], // substitution
+                        min(m[i][j-1] + Wv[1], // insertion
+                        m[i-1][j] + Wv[2])) // deletion
+                            + weightofdigram; //digram weight
+                }
+            }
+          }
+        }
+        //println!("m {:?}\n\n", m);
+        return m[ lens2-1 ][ lens1-1 ]; //returns distnace similarity is 1 - (d/max(len(A,B)))
+    }//END WLEV
+
+    pub fn LEVDAM( s1: &Vec<&str>, s2: &Vec<&str>, Wv: &Vec<usize> ) -> usize { 
+        /*
+            NAME: damerau levenshtein,
+            INPUT: - a text representation s1 and s2,
+                   - Wv a list of 4 weights related to the operations 
+                     substitution, insertion, deletion, exchange,
+            RETURN: sum of editweights,
+
+        */
+        let lens1 = s1.len( );
+        let lens2 = s2.len( );
+        if lens1 == 0 || lens2 == 0 { 
+            return usize::MAX;
+        }
+         
+        if lens1 < lens2 {
+            return LEVDAM( s2, s1, Wv );
+        }
+        
+        let mut m: Vec<Vec<usize>> = vec![]; // is matrix
+        
+        //increment along the first column of each row
+        for i in 0..lens2 {
+            let mut insvec = vec![0; lens1 ];
+            insvec[0] = i;
+            m.push( insvec );
+        }
+        //increment each column in the first row
+        for j in 0..lens1 {
+          m[ 0 ][j] = j;
+        }
+        //fill in the rest of the matrix
+        for i in 1..lens2 {
+          for j in 1..lens1 {
+
+            if s2[ i-1 ] == s1[ j-1 ] {
+              m[i][j] = m[i-1][j-1];
+                
+            } else {
+                if 1 < i && 1 < j {
+                    m[i][j] = min( 
+                                min(
+                                    m[i-1][j-1] + Wv[0], //substitution
+                                    min(
+                                        m[i][j-1] + Wv[1], //insertion
+                                        m[i-1][j] + Wv[2])), //deletion
+                                m[i-2][j-2] + Wv[3] ); //exchange
+                             
+                } else {
+                    m[i][j] = min(m[i-1][j-1] + Wv[0], // substitution
+                        min(m[i][j-1] + Wv[1], // insertion
+                        m[i-1][j] + Wv[2])); // deletion
+                }
+            }
+          }
+        }
+        return m[ lens2-1 ][ lens1-1 ]; //returns distnace similarity is 1 - (d/max(len(A,B)))
+    } //END LEVDAM
+
+    pub fn levenshtein( s1: &Vec<&str>, s2: &Vec<&str>, Wv: &Vec<usize> ) -> usize { 
+        /*
+            NAME: Levenshtein wie immer, weightable,
+            INPUT: - s1 and s2 text representations,
+                   - Wv a list of 4 weights related to the operations 
+                     substitution, insertion, deletion, exchange,
+            RETURN: number of edits,
+        */
+        let lens1 = s1.len( );
+        let lens2 = s2.len( );
+        if lens1 == 0 || lens2 == 0 { 
+            return usize::MAX;
+        }
+         
+        if lens1 < lens2 {
+            return LEVDAM( s2, s1, Wv );
+        }
+        
+        let mut m: Vec<Vec<usize>> = vec![]; // is matrix
+        
+        //increment along the first column of each row
+        for i in 0..lens2 {
+            let mut insvec = vec![0; lens1 ];
+            insvec[0] = i;
+            m.push( insvec );
+        }
+        //increment each column in the first row
+        for j in 0..lens1 {
+          m[ 0 ][j] = j;
+        }
+        //fill in the rest of the matrix
+        for i in 1..lens2 {
+          for j in 1..lens1 {
+
+            if s2[ i-1 ] == s1[ j-1 ] {
+              m[i][j] = m[i-1][j-1];
+                
+            } else {
+                m[i][j] = min(
+                                m[i-1][j-1] + Wv[0], // substitution
+                                min(
+                                    m[i][j-1] + Wv[1], // insertion
+                                    m[i-1][j] + Wv[2]
+                                    )
+                              ); // deletion
+            }
+          }
+        }
+        return m[ lens2-1 ][ lens1-1 ]; //returns distnace similarity is 1 - (d/max(len(A,B)))
+    } //END LEVENSHTEIN 
+
+    pub fn LCS( vecA: &Vec<&str>, vecB: &Vec<&str> ) -> usize { 
+        /*
+            NAME: longest common subsequence (sequence is not substring, it is like sequencial but not next to eachother),
+            INPUT: vecA and vecB text representations,
+            RETURN: 0 (distant) and  max(len(A),len(B)) (not distant),
+        */
+        let lenA = vecA.len( );
+        let lenB = vecB.len( );
+        if lenA == 0 || lenB == 0 { 
+            return 0; 
+        }
+        let mut C: Vec<Vec<usize>> = vec![vec![0; lenB ]; lenA ];
+        for i in 0..lenA {
+            for j in 0..lenB {
+                if vecA[i] == vecB[j] {
+                    if i != 0 && j != 0 {
+                        C[i][j] = max( max( C[i][j-1]+1, C[i-1][j]+1 ), C[i-1][j-1] + 1);
+                    } else {
+                        C[i][j] = 1;
+                    }
+                } else {
+                    if i != 0 && j != 0 {
+                        C[i][j] = max( C[i][j-1], C[i-1][j] ); 
+                    }
+                }
+            }
+        }
+        return C[lenA-1][lenB-1]; //SEE containedness: LCS/len(A) for B contained A or LCS/len(B) for A contained B
+    } //END LCS
+    
+    pub fn LCF( vecA: &Vec<&str>, vecB: &Vec<&str> ) -> usize { 
+        /*
+            NAME: longest common substring (factor, sequential and next to each other members of a vector),
+            INPUT: vecA and vecB text representations,
+            RETURN: 0 (distant, nothing in common) and  max(len(A),len(B)) (not distant),
+        */
+        let lenA = vecA.len( );
+        let lenB = vecB.len( );
+        if lenA == 0 || lenB == 0 { 
+            return 0; 
+        }
+        
+        let mut C: Vec<Vec<usize>> = vec![vec![0; lenB ]; lenA ];
+        let mut maxlen: usize = 0;
+        for i in 0..lenA {
+            for j in 0..lenB {
+                if vecA[i] == vecB[j] {
+                    if i != 0 && j != 0 {
+                        C[i][j] = C[i-1][j-1] + 1;
+                        if maxlen < C[i][j] {
+                            maxlen = C[i][j];
+                        }
+                    } else {
+                        C[i][j] = 1;
+                    }
+                } else {
+                    if i != 0 && j != 0 {
+                        if maxlen < C[i-1][j-1] {
+                            maxlen = C[i-1][j-1];  
+                        }
+                    }
+                    C[i][j] = 0;
+                }
+            }
+        }
+        
+        return maxlen; 
+    } //END LCF
+    
+    pub fn containednessLCS( a: &Vec<&str>, b: &Vec<&str> ) -> f64 {
+        /*
+            NAME: according to LCS the containedness of a in b or b in a,
+            INPUT: a and b text representations,
+            RETURN: 1 (contained) and 0 (not contained),
+        */
+        let lenb = b.len( );
+        let lena = a.len( );
+        if lena == 0 || lenb == 0 {
+            return 0.0;
+        }
+        let lcsab = LCS( a,b );
+        //print!("LCS {}, lena {}, lenb {}, diva {}, divb {}\n", lcsab, lena, lenb,lcsab/lena, lcsab/lenb);
+        if lcsab == 0 {
+            return 0.0;
+        } else {
+            return pmax(  lcsab as f64 / lena as f64,  lcsab as f64 /  lenb as f64 );
+        }
+    } //END CONTAINEDNESSLCS
+
+    pub fn containednessLCF( a: &Vec<&str>, b: &Vec<&str> ) -> f64 {
+        /*
+            NAME: according to LCF the containedness of a in b or b in a
+            INPUT: a and b text representations
+            RETURN: 1 (contained) and 0 (not contained),
+        */
+        let lenb = b.len( );
+        let lena = a.len( );
+        if lena == 0 || lenb == 0 {
+            return 0.0;
+        }
+        let lcfab = LCF( a, b );
+        if lcfab == 0 {
+            return 0.0;
+        } else {
+            return pmax(  lcfab as f64 / lena as f64,  lcfab as f64 /  lenb as f64 );
+        }
+    } //END CONTAINEDNESSLCF
+
+    pub fn LCP( vecA: &Vec<&str>, vecB: &Vec<&str> ) -> usize {
+        /*
+            NAME: longest commen prefix,
+            INPUT: vecA and vecB text representations,
+            RETURN: 0 (distant) and  max(len(A),len(B)) (not distant),
+        */
+        let mut sizeofcommenprefix: usize = 0;
+        let lenMIN = min( vecA.len( ), vecB.len( ) );
+        if lenMIN == 0 { 
+            return 0; 
+        }
+        
+        for i in 0..lenMIN {
+            if vecA[i] == vecB[i] {
+                sizeofcommenprefix += 1;
+            } else {
+                break;
+            }
+        }
+        return sizeofcommenprefix;
+    } //END LCP
+
+    pub fn bagdist( vecA: &Vec<&str>, vecB: &Vec<&str> ) -> usize {
+        /*
+            NAME: bag distance (vecA is a bag is a sequencial, and next to eachother, redundant vector), aproximation of levensthein,
+            INPUT: vecA and vecB text representations,
+            RETURN: max(len(A),len(B)) (distant) and 0 (not distant),
+        */
+        let mut eraseA = vecA.clone( );
+        let lenA = vecA.len( );
+        let mut eraseB = vecB.clone( );
+        let lenB = vecB.len( );
+        
+        for i in 0..lenA {
+            match vecB.iter( ).position( |&p| p == vecA[ i ] ) {
+                Some( v ) => eraseB[ v ] = "NONONO",
+                None => (), 
+            }
+        }
+
+        let mut countinB = 0;
+        for i in 0..lenB {
+            if eraseB[ i ] == "NONONO" {
+                countinB += 1;
+            }
+        }
+
+        for i in 0..lenB {
+            match vecA.iter( ).position( |&p| p == vecB[ i ] ) {
+                Some( v ) => eraseA[ v ] = "NONONO",
+                None => (),
+            }
+        }
+
+        let mut countinA = 0;
+        for i in 0..lenA {
+            if eraseA[ i ] == "NONONO" {
+                countinA += 1;
+            }
+        }
+        
+        return max( countinA, countinB );
+    } //END BAGDIST
+
+    pub fn JA( vecA: &Vec<&str>, vecB: &Vec<&str> ) -> f64 { 
+        /* 
+            NAME: jaro distance,
+            INPUT: vecA, vecB text represenations,
+            RETURN: Inf (distant) and 0.0 (not distant) ???,
+        */
+
+        let lenA = vecA.len( );
+        let lenB = vecB.len( );
+        if lenA == 0 || lenB == 0 { 
+            return f64::INFINITY; 
+        }
+        if lenB < lenA {
+            return JA( vecB, vecA );
+        }
+        let maAB: i64 = max( lenB, lenA ) as i64;
+
+        /*if( lenA != lenB ){
+            return maAB; //ist das der richtige rückgabewert
+        }HÄ ????????????*/
+        
+        let matchDist: i64 = (maAB/2)-1;
+        let mut Amatches: Vec<bool> = vec![false; lenA ];  
+        let mut Bmatches: Vec<bool> = vec![false; lenB ];
+        let mut matchcount: usize = 0;
+        let mut traspocount: usize = 0;
+
+        
+        for i in 0..lenA {
+            let sta = max( 0 as i64, i as i64 - matchDist ) as usize;
+            let en =  min( i as i64 + matchDist + 1, lenB as i64 ) as usize;
+
+            for j in sta..en {
+                if Bmatches[j] {
+                    continue;
+                }
+                if vecA[i] != vecB[j] {
+                    continue;
+                }
+                Amatches[i] = true;
+                Bmatches[j] = true;
+                matchcount+=1;
+                break;
+            }
+        }
+        if matchcount == 0 {
+            return maAB as f64; //ist das der richtige rückgabewert 
+        }
+
+        let mut j: usize = 0;
+        for i in 0..lenA {
+            if !Amatches[i] {
+                continue;
+            }
+            while !Bmatches[j] {
+                j+=1;
+            }
+            if vecA[i] != vecB[i] {
+                traspocount += 1;
+            }
+            j+=1;
+        }
+        return  ( (matchcount as f64/lenA as f64) + (matchcount as f64/lenB as f64) + (((matchcount as f64 -traspocount as f64)/2.0)/matchcount as f64 )) / 3.0 ;  
+    } //END JA
+
+    pub fn JAWI( vecA: &Vec<&str>, vecB: &Vec<&str> ) -> f64 { 
+        /* 
+            NAME: jaro winkler distance, transpositions,
+            INPUT: vecA, vecB text represenations,
+            RETURN: Inf (distant) and 0.0 (not distant) ???,
+        */
+        let lenA = vecA.len( );
+        let lenB = vecB.len( );
+        if lenA == 0 || lenB == 0 { 
+            return f64::INFINITY;
+        }
+        let onlyJaro = JA( vecA, vecB );
+        return onlyJaro + ( ( max( 4, LCP(vecA, vecB)) as f64 / 10.0 ) * ( 1.0 - onlyJaro ));
+    } // END JAWI
+
+    pub fn baire( vecA: &Vec<&str>, vecB: &Vec<&str> ) -> f64  {
+        /* 
+            NAME: baire distance,
+            INPUT: vecA, vecB text represenations,
+            RETURN: 0 (distant) and 1.0 (not distant) ???,
+        */
+        let lenA = vecA.len( );
+        let lenB = vecB.len( );
+        if lenA == 0 || lenB == 0 { 
+            return f64::INFINITY; 
+        }
+        return  1.0 / (1.0 + LCP(vecA, vecB) as f64);
+    }
+
+    pub fn generalizedcantor( vecA: &Vec<&str>, vecB: &Vec<&str> ) -> f64  {
+        /* 
+            NAME: gen. cantor distance, 
+            INPUT: vecA, vecB text represenations,
+            RETURN: Inf/1 (distant) and 0.0 (not distant) ???,
+        */
+        let lenA = vecA.len( );
+        let lenB = vecB.len( );
+        if lenA == 0 || lenB == 0 { 
+            return f64::INFINITY; 
+        }
+        return f64::powf( 1.0/std::f64::consts::E, 1.0 + LCP(vecA, vecB) as f64 ); //a 1/Math.E can also be 1/2
+    } // END GENERALIZEDCANTOR
+
+    pub fn notgeneralizedcantor( vecA: &Vec<&str>, vecB: &Vec<&str> ) -> f64  {
+        /* 
+            NAME: not gen. cantor distance, 
+            INPUT: vecA, vecB text represenations,
+            RETURN: Inf/1 (distant) and 0.0 (not distant) ???,
+        */
+        let lenA = vecA.len( );
+        let lenB = vecB.len( );
+        if lenA == 0 || lenB == 0 { 
+            return f64::INFINITY; 
+        }
+        return f64::powf( 1.0/std::f64::consts::E, 1.0 + LCF(vecA, vecB) as f64 ); 
+    }// END NOTGENERALIZEDCANTOR
+
+    pub fn jaccardMASZzwei( vecA: &Vec<&str>, vecB: &Vec<&str> ) -> f64  {
+        /* 
+            NAME: derived from jaccard distance, transpositions,
+            INPUT: vecA, vecB text represenations,
+            RETURN: Inf/1 (not distant) and 0.0 (distant) ???,
+        */ 
+        let lenA = vecA.len( );
+        let lenB = vecB.len( );
+        if lenA == 0 || lenB == 0 { 
+            return f64::INFINITY; 
+        }
+        let setA = set( vecA );
+        let setB = set( vecB );
+        return  1.0 - ( SetSymDiffLen( &setA, &setB ) as f64  / SetUnsionLen( &setB, &setA ) as f64 );
+    } // END JACCARDMASZZWEI
+
+    pub fn jaccardMASZ( vecA: &Vec<&str>, vecB: &Vec<&str> ) -> f64  {
+        /* 
+            NAME: jaccard distance, transpositions,
+            INPUT: vecA, vecB text represenations,
+            RETURN: Inf/1 (distant) and 0.0 (not distant) ???,
+        */ 
+        let lenA = vecA.len( );
+        let lenB = vecB.len( );
+        if lenA == 0 || lenB == 0 { 
+            return f64::INFINITY;  
+        }
+        let setA = set( vecA );
+        let setB = set( vecB );
+        return  1.0 -  ( SetIntersectionLen( &setA, &setB ) as f64  / SetUnsionLen( &setB, &setA ) as f64 );
+    } // END JACCARDMASZ
+
+    pub fn cosineMASZ( vecA: &Vec<&str>, vecB: &Vec<&str> )  -> f64  { 
+        /* 
+            NAME: cosine distance,
+            INPUT: vecA, vecB text represenations,
+            RETURN: Inf/1 (distant) and 0.0 (not distant) ???,
+        */
+        let lenA = vecA.len( );
+        let lenB = vecB.len( );
+        if lenA == 0 || lenB == 0 { 
+            return f64::INFINITY; 
+        }  
+        //müsste doch so klappen, oder was????
+        let setA = set( vecA );
+        let setB = set( vecB );
+        let setAB = SetUnsion( &setA, &setB );
+        let unionAB = list( &setAB );
+
+        //occurenz count of gram in A or B
+        let mut x: Vec<usize> = vec![]; //A
+        let mut y: Vec<usize> = vec![]; //B
+        let lenAB = unionAB.len( );
+
+        for i in 0..lenAB {
+            let mut currcount: usize = 0;
+            for j in 0..lenA {
+                if unionAB[ i ] == vecA[ j ] {
+                    currcount += 1;
+                }
+            }
+            x.push( currcount );
+            currcount = 0;
+            for j in 0..lenB {
+                if unionAB[ i ] == vecB[ j ] {
+                    currcount += 1;
+                }
+            }
+            y.push( currcount );
+        }   
+        let mut summederquadrateA: usize = 0;
+        let mut summederquadrateB: usize = 0;
+        let mut scalarprod: usize = 0;
+        let lenx = x.len( );
+
+        for u in 0..lenx {
+            summederquadrateA += x[ u ] * x[ u ]; 
+            summederquadrateB += y[ u ] * y[ u ];
+            scalarprod += x[ u ] * y[ u ];
+        }
+    
+        let vecnormA = f64::sqrt( summederquadrateA as f64 );
+        let vecnormB = f64::sqrt( summederquadrateB as f64 );
+    
+        return 1.0 - ( scalarprod as f64 / ( vecnormA*vecnormB ) ); 
+    } 
+
+    pub fn quadradiffMASZ( vecA: &Vec<&str>, vecB: &Vec<&str> ) -> f64 { 
+        /* 
+            NAME: quadratic difference distance,
+                  # vec A and B are arrays of ngrams or silben, quadraDiff is a messure taken from the haufigkeitsvektor of A and B
+            INPUT: vecA, vecB text represenations,
+            RETURN: Inf (distant) and 0.0 (not distant) ???,
+        */
+        let lenA = vecA.len( );
+        let lenB = vecB.len( );
+        if lenA == 0 || lenB == 0 { 
+            return f64::INFINITY; 
+        } 
+        //müsste doch so klappen, oder was????
+        let setA = set( vecA );
+        let setB = set( vecB );
+        let setunion = SetUnsion( &setA, &setB );
+        let unionAB = list( &setunion );
+
+        //occurenz count of gram in A or B
+        let mut x: Vec<usize> = vec![]; //A
+        let mut y: Vec<usize> = vec![]; //B  
+        let lenAB = unionAB.len( );
+        for i in 0..lenAB {
+            let mut currcount = 0;
+            for j in 0..lenA {
+                if unionAB[ i ] == vecA[ j ] {
+                    currcount += 1;
+                }
+            }
+            x.push( currcount );
+            currcount = 0;
+            for j in 0..lenB {
+                if unionAB[ i ] == vecB[ j ] {
+                    currcount += 1;
+                }
+            }
+            y.push( currcount );
+        }   
+        let mut sumitup: f64 = 0.0;
+        let lenx = x.len( );
+        for u in 0..lenx {
+            sumitup += (((x[ u ] - y[ u ]) * (x[ u ] - y[ u ])) as f64).abs( );
+        }
+        return f64::sqrt( sumitup );
+    } // END QUADRADIFFMASZ
+
+    pub fn diceMASZ( vecA: &Vec<&str>, vecB: &Vec<&str> ) -> f64 {
+        /* 
+            NAME: dice coefficent distance,
+            INPUT: vecA, vecB text represenations,
+            RETURN: Inf/1 (distant) and 0.0 (not distant) ???,
+        */
+        let lenA = vecA.len( );
+        let lenB = vecB.len( );
+        if lenA == 0 || lenB == 0 { 
+            return f64::INFINITY; 
+        } 
+        let setA = set( vecA );
+        let setB = set( vecB );
+        return 1.0 - ( ( 2.0 * SetIntersectionLen( &setA, &setB ) as f64 ) / ( setA.len( ) + setB.len( ) ) as f64 )
+    } // END DICEMASZ
+
+    pub fn markingmetric( vecA: &Vec<&str>, vecB: &Vec<&str> ) -> f64 {
+        /* 
+            NAME: marking distance,
+                  # https://www.sciencedirect.com/science/article/pii/0166218X88900765
+                  # wir untersuchen die Übergränge ist eine übergang nicht Teil des anderen, dann merke die position des buchstabens der in gelöscht werden muss, entweder einer oder beide
+            INPUT: vecA, vecB text represenations,
+            RETURN: Inf (distant) and 0.0 (not distant) ???,
+        */
+        let lenA = vecA.len( );
+        let lenB = vecB.len( );
+        if lenA == 0 || lenB == 0 { 
+            return f64::INFINITY; 
+        } 
+        let mut posesA: Vec<usize> = vec![];
+        
+        for i in 1..lenA {
+            let mut iba: i64 = -1; 
+            match vecB.iter( ).position( |&p| p == vecA[i-1] ) {
+                Some( v ) => iba = v as i64,
+                None => (), 
+            }
+            let mut ibb: i64 = -1;
+            match vecB.iter( ).position( |&p| p == vecA[i] ) {
+                Some( v ) => ibb = v as i64,
+                None => (), 
+            }
+            if iba != -1 && ibb != -1 {
+                if !( (iba-ibb).abs( ) == 1 ) {
+                    posesA.push( i ); //völlig egal welcher index aufgeschrieben wird
+                }
+            } else {
+                if iba == -1 && ibb == -1 {
+                    posesA.push( i-1 );
+                    posesA.push( i );
+                } else {
+                    posesA.push( i-1 );
+                }
+            }
+        }
+
+        let mut posesB: Vec<usize> = vec![];
+
+        for i in 1..lenB {
+            let mut iaa: i64 = -1;
+            match vecA.iter( ).position( |&p| p == vecB[i-1] ) {
+                Some( v ) => iaa = v as i64,
+                None => (), 
+            }
+            let mut iab: i64 = -1;
+            match vecA.iter( ).position( |&p| p == vecB[i] ) {
+                Some( v ) => iab = v as i64,
+                None => (), 
+            }
+
+            if iaa != -1 && iab != -1 {
+                if !( (iaa-iab).abs( ) == 1 ) {
+                    posesB.push( i ); //völlig egal welcher index aufgeschrieben wird
+                }
+            } else {
+                if iaa == -1 && iab == -1 {
+                    posesB.push( i-1 );
+                    posesB.push( i );
+                } else {
+                    posesB.push( i-1 );
+                }
+            }
+        }
+        
+        return ( ( posesA.len( )+1 ) as f64 * ( posesB.len( )+1 ) as f64 ).log( std::f64::consts::E );
+    } // MARKINGMETRIC
+
+    pub fn setdiffmetric( vecA: &Vec<&str>, vecB: &Vec<&str> ) -> f64 {
+        /* 
+            NAME: set diff distance, derived from marking metric, containedness gedanken
+            INPUT: vecA, vecB text represenations,
+            RETURN: Inf (distant) and 0.0 (not distant) ???,
+        */
+        let lenA = vecA.len( );
+        let lenB = vecB.len( );
+        if lenA == 0 || lenB == 0 { 
+            return f64::INFINITY; 
+        } 
+        let setA = set( vecA );
+        let setB = set( vecB );
+        let ABlen = SetDiffLen( &setA, &setB );
+        let BAlen = SetDiffLen( &setB, &setA );
+        return ( ( ABlen+1 ) as f64 * ( BAlen+1 ) as f64 ).log( std::f64::consts::E );
+    } // END SETDIFFMETRIC
 }
 
 //******************************************************************************
@@ -107,7 +907,7 @@ pub mod textdecomp{
         buchstLAT
     };
     }//lazy static end
-}
+}//end mod textdecomp
 
 
 
@@ -706,7 +1506,7 @@ pub mod textnorm{
     pub static ref regEKai: Regex = Regex::new( "Ϗ" ).unwrap();
     pub static ref regEl1: Regex = Regex::new( "\u{0223}" ).unwrap();
     pub static ref regEl2: Regex = Regex::new( "\u{0222}" ).unwrap();
-    pub static ref unterPu: Regex = Regex::new("◌̣ " ).unwrap();
+    pub static ref unterPu: Regex = Regex::new("\u{0323}" ).unwrap();
     
     pub static ref regEdoppelP: Regex = Regex::new( ":" ).unwrap();
     pub static ref regEeinfahP: Regex = Regex::new( "\\." ).unwrap();
@@ -1511,7 +2311,6 @@ pub mod textnorm{
     pub fn delUnterpunkt( text: &String ) -> String {
         return unterPu.replace_all( text, "" ).to_string( );
     }
-
-}
+} //end textnorm
 
 
